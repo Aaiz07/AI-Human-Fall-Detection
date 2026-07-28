@@ -3,79 +3,53 @@ import cv2
 
 class Dashboard:
 
-    def draw(
-        self,
-        frame,
-        people,
-        falls,
-        fps,
-        status
-    ):
+    def __init__(self):
 
-        cv2.rectangle(
-            frame,
-            (10, 10),
-            (330, 180),
-            (40, 40, 40),
-            -1,
-        )
+        pass
 
-        cv2.rectangle(
-            frame,
-            (10, 10),
-            (330, 180),
-            (0, 255, 255),
-            2,
-        )
+    # -------------------------------
 
-        cv2.putText(
-            frame,
-            "AI HUMAN FALL DETECTION",
-            (20, 35),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            0.65,
-            (0, 255, 255),
-            2,
-        )
+    def update(self, frame, person_id, result):
 
-        cv2.putText(
-            frame,
-            f"People : {people}",
-            (20, 70),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            0.6,
-            (255, 255, 255),
-            2,
-        )
+        text = [
 
-        cv2.putText(
-            frame,
-            f"Falls  : {falls}",
-            (20, 95),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            0.6,
-            (0, 0, 255),
-            2,
-        )
+            f"ID : {person_id}",
 
-        cv2.putText(
-            frame,
-            f"FPS    : {fps}",
-            (20, 120),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            0.6,
-            (0, 255, 0),
-            2,
-        )
+            f"State : {result['state']}",
 
-        cv2.putText(
-            frame,
-            f"Status : {status}",
-            (20, 145),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            0.6,
-            (255, 255, 0),
-            2,
-        )
+            f"Posture : {result['posture']}",
 
-        return frame
+            f"Speed : {result['speed']:.1f}",
+
+            f"Acceleration : {result['acceleration']:.1f}",
+
+            f"Impact : {result['impact']}"
+
+        ]
+
+        x = 20
+
+        y = 30
+
+        for t in text:
+
+            cv2.putText(
+
+                frame,
+
+                t,
+
+                (x, y),
+
+                cv2.FONT_HERSHEY_SIMPLEX,
+
+                0.6,
+
+                (255,255,255),
+
+                2
+
+            )
+
+            y += 25
+            

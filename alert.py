@@ -1,4 +1,3 @@
-import os
 import winsound
 
 
@@ -6,8 +5,24 @@ class AlertSystem:
 
     def __init__(self):
 
-        os.makedirs("screenshots", exist_ok=True)
+        self.active = False
 
-    def alarm(self):
+    # -------------------------------
 
-        winsound.Beep(1500, 500)
+    def trigger(self):
+
+        if self.active:
+
+            return
+
+        self.active = True
+
+        winsound.Beep(
+
+            1000,
+
+            500
+
+        )
+
+        self.active = False

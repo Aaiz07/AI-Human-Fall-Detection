@@ -1,24 +1,25 @@
 import cv2
-import time
-from datetime import datetime
+from ultralytics import YOLO
 
 from detector import PersonDetector
 from pose import BodyAnalyzer
 from fall_detector import FallDetector
+
 from logger import FallLogger
+from dashboard import Dashboard
 from alert import AlertSystem
 from video_recorder import VideoRecorder
-from dashboard import Dashboard
+
 from config import *
 
-# ==============================
-# Initialize Modules
-# ==============================
 
-detector = PersonDetector(
-    MODEL_PATH,
-    CONFIDENCE_THRESHOLD
-)
+# ---------------------------------------
+# Load Model
+# ---------------------------------------
+
+model = YOLO(MODEL_PATH)
+
+detector = PersonDetector(model)
 
 analyzer = BodyAnalyzer()
 
@@ -26,300 +27,161 @@ fall_detector = FallDetector()
 
 logger = FallLogger()
 
+dashboard = Dashboard()
+
 alert = AlertSystem()
 
 recorder = VideoRecorder()
 
-dashboard = Dashboard()
-
-# ==============================
-# Variables
-# ==============================
-
-fall_count = 0
-people_count = 0
-
-recording = False
-record_frames = 0
-
-camera_status = "Active"
-
-# ==============================
-# Open Camera
-# ==============================
+# ---------------------------------------
+# Camera
+# ---------------------------------------
 
 cap = cv2.VideoCapture(CAMERA_ID)
 
 if not cap.isOpened():
-    print("Cannot open camera")
+
+    print("Cannot open camera.")
+
     exit()
 
-prev_time = time.time()
-
-# ==============================
-# Main Loop
-# ==============================
-
+cv2.namedWindow(WINDOW_NAME, cv2.WINDOW_NORMAL)
 while True:
 
     ret, frame = cap.read()
 
     if not ret:
+
         break
 
-    results = detector.track(frame, TRACKER_CONFIG)
+    detections = detector.detect(frame)
 
-    annotated_frame = results[0].plot()
+    for detection in detections:
 
-    people_count = 0
+        person_id = detection["id"]
 
-    if (
-        results[0].boxes is not None
-        and results[0].boxes.id is not None
-        and results[0].keypoints is not None
-    ):
+        box = detection["box"]
 
-        ids = results[0].boxes.id.cpu().numpy().astype(int)
-        boxes = results[0].boxes.xyxy.cpu().numpy()
-        keypoints = results[0].keypoints.xy.cpu().numpy()
+        keypoints = detection["keypoints"]
 
-        people_count = len(ids)
+        analysis = analyzer.analyze(
 
-        for track_id, box, person_keypoints in zip(
-            ids,
-            boxes,
-            keypoints,
-        ):
+            box,
 
-            analysis = analyzer.analyze(
-                box,
-                person_keypoints
-            )
+            keypoints
 
-            fall_detected = fall_detector.detect(
-                track_id,
-                analysis
-            )
+        )
 
-            # --------------------------
-            # Start Video Recording
-            # --------------------------
+        result = fall_detector.detect(
 
-            if fall_detected and not recording:
+            person_id,
 
-                recorder.start(frame)
+            analysis
 
-                recording = True
+        )
 
-                record_frames = 200
+        x1, y1, x2, y2 = map(int, box)
 
-                fall_count += 1
+        color = (0, 255, 0)
 
-            x1, y1, x2, y2 = map(int, box)
+        if result["fall"]:
 
-            # --------------------------
-            # Person Status
-            # --------------------------
+            color = (0, 0, 255)
 
-            if fall_detected:
+        elif result["state"] == "POSSIBLE_FALL":
 
-                status = "FALL DETECTED"
+            color = (0, 255, 255)
 
-                color = (0, 0, 255)
+        cv2.rectangle(
 
-            else:
+            frame,
 
-                status = analysis["posture"]
+            (x1, y1),
 
-                color = (0, 255, 0)
+            (x2, y2),
 
-            # --------------------------
-            # Draw Track ID
-            # --------------------------
+            color,
 
-            cv2.putText(
-                annotated_frame,
-                f"ID: {track_id}",
-                (x1, y1 - 40),
-                cv2.FONT_HERSHEY_SIMPLEX,
-                0.7,
-                (0, 255, 255),
-                2,
-            )
+            2
 
-            # --------------------------
-            # Draw Status
-            # --------------------------
+        )
+        cv2.putText(
 
-            cv2.putText(
-                annotated_frame,
-                status,
-                (x1, y1 - 15),
-                cv2.FONT_HERSHEY_SIMPLEX,
-                0.7,
-                color,
-                2,
-            )
+            frame,
 
-            # --------------------------
-            # Draw Center
-            # --------------------------
+            f"ID : {person_id}",
 
-            cx, cy = analysis["center"]
+            (x1, y1 - 70),
 
-            cv2.circle(
-                annotated_frame,
-                (cx, cy),
-                5,
-                (255, 0, 0),
-                -1,
-            )
-                        # --------------------------
-            # Print Information
-            # --------------------------
+            cv2.FONT_HERSHEY_SIMPLEX,
 
-            print("-" * 60)
-            print(f"Person ID : {track_id}")
-            print(f"Width     : {analysis['width']}")
-            print(f"Height    : {analysis['height']}")
-            print(f"Ratio     : {analysis['ratio']}")
-            print(f"Angle     : {analysis['angle']}")
-            print(f"Center    : {analysis['center']}")
-            print(f"Posture   : {analysis['posture']}")
+            0.6,
 
-            # --------------------------
-            # Fall Event
-            # --------------------------
+            color,
 
-            if fall_detected:
+            2
 
-                print("=" * 60)
-                print(f"🚨 FALL DETECTED - Person ID {track_id}")
-                print("=" * 60)
+        )
 
-                alert.alarm()
+        cv2.putText(
 
-                logger.log(track_id)
+            frame,
 
-                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            f"State : {result['state']}",
 
-                filename = (
-                    f"screenshots/fall_{track_id}_{timestamp}.jpg"
-                )
+            (x1, y1 - 45),
 
-                cv2.imwrite(filename, annotated_frame)
+            cv2.FONT_HERSHEY_SIMPLEX,
 
-                print(f"Screenshot Saved : {filename}")
+            0.6,
 
-        # --------------------------
-        # Draw Keypoints
-        # --------------------------
+            color,
 
-        for person in keypoints:
+            2
 
-            for x, y in person:
+        )
 
-                if x > 0 and y > 0:
+        cv2.putText(
 
-                    cv2.circle(
-                        annotated_frame,
-                        (int(x), int(y)),
-                        3,
-                        (0, 0, 255),
-                        -1,
-                    )
+            frame,
 
-    # --------------------------
-    # Video Recording
-    # --------------------------
+            f"Speed : {result['speed']:.1f}",
 
-    if recording:
+            (x1, y1 - 20),
 
-        recorder.write(frame)
+            cv2.FONT_HERSHEY_SIMPLEX,
 
-        record_frames -= 1
+            0.6,
 
-        if record_frames <= 0:
+            color,
 
-            recorder.stop()
+            2
 
-            recording = False
+        )
 
-    # --------------------------
-    # FPS
-    # --------------------------
+        dashboard.update(frame, person_id, result)
 
-    current_time = time.time()
+        if result["fall"]:
 
-    fps = 1 / (current_time - prev_time)
+            logger.log(person_id)
 
-    prev_time = current_time
+            alert.trigger()
 
-    # --------------------------
-    # Dashboard Status
-    # --------------------------
-
-    dashboard_status = "Monitoring"
-
-    if recording:
-        dashboard_status = "Recording"
-
-    annotated_frame = dashboard.draw(
-        annotated_frame,
-        people_count,
-        fall_count,
-        int(fps),
-        dashboard_status,
-    )
-
-    # --------------------------
-    # Camera Status
-    # --------------------------
-
-    cv2.putText(
-        annotated_frame,
-        f"Camera : {camera_status}",
-        (20, 205),
-        cv2.FONT_HERSHEY_SIMPLEX,
-        0.6,
-        (255, 255, 255),
-        2,
-    )
-
-    # --------------------------
-    # Total Falls
-    # --------------------------
-
-    cv2.putText(
-        annotated_frame,
-        f"Total Falls : {fall_count}",
-        (20, 230),
-        cv2.FONT_HERSHEY_SIMPLEX,
-        0.6,
-        (0, 0, 255),
-        2,
-    )
-
-    # --------------------------
-    # Show Window
-    # --------------------------
+            recorder.save(frame)
 
     cv2.imshow(
+
         WINDOW_NAME,
-        annotated_frame,
+
+        frame
+
     )
 
-    key = cv2.waitKey(1) & 0xFF
+    key = cv2.waitKey(1)
 
     if key == ord("q"):
+
         break
-
-# ==============================
-# Cleanup
-# ==============================
-
-if recording:
-    recorder.stop()
 
 cap.release()
 

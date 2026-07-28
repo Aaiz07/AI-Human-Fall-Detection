@@ -2,42 +2,43 @@ import cv2
 import os
 from datetime import datetime
 
+from config import RECORDING_FOLDER
+
 
 class VideoRecorder:
 
     def __init__(self):
 
-        os.makedirs("videos", exist_ok=True)
+        os.makedirs(
 
-        self.writer = None
+            RECORDING_FOLDER,
 
-    def start(self, frame):
+            exist_ok=True
+
+        )
+
+    # -------------------------------
+
+    def save(self, frame):
 
         filename = datetime.now().strftime(
-            "videos/fall_%Y%m%d_%H%M%S.mp4"
+
+            "%Y%m%d_%H%M%S.jpg"
+
         )
 
-        h, w = frame.shape[:2]
+        path = os.path.join(
 
-        fourcc = cv2.VideoWriter_fourcc(*"mp4v")
+            RECORDING_FOLDER,
 
-        self.writer = cv2.VideoWriter(
-            filename,
-            fourcc,
-            20,
-            (w, h),
+            filename
+
         )
 
-    def write(self, frame):
+        cv2.imwrite(
 
-        if self.writer is not None:
-            self.writer.write(frame)
+            path,
 
-    def stop(self):
+            frame
 
-        if self.writer is not None:
-
-            self.writer.release()
-
-            self.writer = None
-            
+        )
